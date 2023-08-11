@@ -1,0 +1,53 @@
+ @Bean
+    public ClientRegistration recommendationClientRegistration() {
+        OAuth2ClientProperties.Provider provider = oAuth2ClientProperties.getProvider().get(transmitSecurityProperties.getRegistrationId());
+        OAuth2ClientProperties.Registration registration = oAuth2ClientProperties.getRegistration().get(transmitSecurityProperties.getRegistrationId());
+        return ClientRegistration.withRegistrationId(RecommendationConstants.RISK)
+                .clientId(transmitSecurityProperties.getClientId())
+                .clientSecret(transmitSecurityProperties.getClientSecret())
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .redirectUri(registration.getRedirectUri())
+                .authorizationUri(provider.getAuthorizationUri())
+                .tokenUri(provider.getTokenUri())
+                .userInfoUri(provider.getUserInfoUri())
+                .userNameAttributeName(IdTokenClaimNames.SUB)
+                .jwkSetUri(provider.getJwkSetUri())
+                .registrationId(RecommendationConstants.RISK)
+                .clientName(registration.getClientName())
+                .build();
+    }
+    @Bean("recommendationReactiveClientRegistrationRepository")
+    ReactiveClientRegistrationRepository recommendationReactiveClientRegistrationRepository(ClientRegistration recommendationClientRegistration) {
+        return new InMemoryReactiveClientRegistrationRepository(recommendationClientRegistration);
+    }
+
+    public WebClientReactiveClientCredentialsTokenResponseClient client() {
+        WebClientReactiveClientCredentialsTokenResponseClient client = new WebClientReactiveClientCredentialsTokenResponseClient();
+        client.setParametersConverter(n -> {
+            MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+            map.add(RecommendationConstants.RESOURCE, transmitSecurityProperties.getResource());
+            map.add(RecommendationConstants.GRANT_TYPE, n.getGrantType().getValue());
+            return map;
+        });
+        return client;
+    }
+
+    @Bean("recommendationsWebClient")
+    WebClient webClient(ReactiveClientRegistrationRepository recommendationReactiveClientRegistrationRepository) {
+        ClientCredentialsReactiveOAuth2AuthorizedClientProvider clientCredentialsReactiveOAuth2AuthorizedClientProvider =
+                new ClientCredentialsReactiveOAuth2AuthorizedClientProvider();
+        clientCredentialsReactiveOAuth2AuthorizedClientProvider.setAccessTokenResponseClient(client());
+        InMemoryReactiveOAuth2AuthorizedClientService clientService =
+                new InMemoryReactiveOAuth2AuthorizedClientService(recommendationReactiveClientRegistrationRepository);
+        AuthorizedClientServiceReactiveOAuth2AuthorizedClientManager authorizedClientManager =
+                new AuthorizedClientServiceReactiveOAuth2AuthorizedClientManager(recommendationReactiveClientRegistrationRepository, clientService);
+        authorizedClientManager.setAuthorizedClientProvider(clientCredentialsReactiveOAuth2AuthorizedClientProvider);
+        ServerOAuth2AuthorizedClientExchangeFilterFunction oauth = new ServerOAuth2AuthorizedClientExchangeFilterFunction(authorizedClientManager);
+        oauth.setDefaultClientRegistrationId(RecommendationConstants.RISK);
+        oauth.setDefaultOAuth2AuthorizedClient(true);
+        return WebClient.builder()
+                        .baseUrl(riskSecurityProperties.getBaseUrl())
+                        .filter(oauth)
+                        .build();
+    }
