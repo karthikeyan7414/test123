@@ -1,0 +1,19 @@
+security:
+    oauth2:
+      client:
+        registration:
+          transmit:
+            client-name: 
+            client-id:
+            client-secret: 
+            scope:
+              - openid
+              - email
+            client-authentication-method: basic
+            authorization-grant-type: authorization_code
+            redirect-uri: 
+        provider:
+          transmit:
+            token-uri: 
+            authorization-uri:
+            jwk-set-uri: 
